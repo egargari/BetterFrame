@@ -115,6 +115,8 @@
       e.preventDefault();
       e.stopPropagation();
       onClick();
+      // Remove focus so space key returns to play/pause functionality
+      button.blur();
     });
 
     // Add keyboard support (Enter and Space)
@@ -123,6 +125,8 @@
         e.preventDefault();
         e.stopPropagation();
         onClick();
+        // Remove focus so space key returns to play/pause functionality
+        button.blur();
       }
     });
 
