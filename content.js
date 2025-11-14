@@ -58,8 +58,19 @@
 
   /**
    * Find the play button specifically
+   * Frame.io uses <div role="button"> instead of <button> elements
    */
   function findPlayButton() {
+    // First try to find div with role="button" and aria-label="Play"
+    const divButtons = document.querySelectorAll('[role="button"]');
+    for (const button of divButtons) {
+      const ariaLabel = button.getAttribute('aria-label') || '';
+      if (ariaLabel.toLowerCase().includes('play')) {
+        return button;
+      }
+    }
+
+    // Fallback: try regular button elements
     const buttons = document.querySelectorAll('button');
     for (const button of buttons) {
       const ariaLabel = button.getAttribute('aria-label') || '';
@@ -88,15 +99,33 @@
   }
 
   /**
-   * Create a control button
+   * Create a control button matching Frame.io's style
    */
   function createButton(icon, onClick, ariaLabel) {
-    const button = document.createElement('button');
+    const button = document.createElement('div');
     button.className = 'betterframe-skip-button';
-    button.innerHTML = icon;
+    button.setAttribute('role', 'button');
+    button.setAttribute('tabindex', '0');
     button.setAttribute('aria-label', ariaLabel);
     button.setAttribute('title', ariaLabel);
-    button.addEventListener('click', onClick);
+    button.innerHTML = icon;
+
+    // Add click handler
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+
+    // Add keyboard support (Enter and Space)
+    button.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }
+    });
+
     return button;
   }
 
