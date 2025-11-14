@@ -1,0 +1,78 @@
+/* BetterFrame - Enhanced Frame.io Controls Styles */
+
+.betterframe-skip-button {
+  /* Match Frame.io's button styling */
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 8px;
+  margin: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  outline: none;
+  position: relative;
+}
+
+.betterframe-skip-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.05);
+}
+
+.betterframe-skip-button:active {
+  transform: scale(0.95);
+}
+
+.betterframe-skip-button:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}
+
+.betterframe-skip-button svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+  pointer-events: none;
+}
+
+/* Tooltip on hover */
+.betterframe-skip-button::after {
+  content: attr(aria-label);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 10000;
+}
+
+.betterframe-skip-button:hover::after {
+  opacity: 1;
+}
+
+/* Animation for button appearance */
+@keyframes betterframe-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.betterframe-skip-button {
+  animation: betterframe-fade-in 0.3s ease;
+}

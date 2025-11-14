@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate BetterFrame Icons</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      margin: 10px 0;
+    }
+    button {
+      background: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #3367d6;
+    }
+    .info {
+      background: #e8f5e9;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>BetterFrame Icon Generator</h1>
+    <div class="info">
+      This page generates the required PNG icons for the BetterFrame extension.
+      Click the buttons below to download each icon size.
+    </div>
+
+    <h2>16x16 Icon</h2>
+    <canvas id="icon16" width="16" height="16"></canvas><br>
+    <button onclick="downloadIcon('icon16', 16)">Download icon16.png</button>
+
+    <h2>48x48 Icon</h2>
+    <canvas id="icon48" width="48" height="48"></canvas><br>
+    <button onclick="downloadIcon('icon48', 48)">Download icon48.png</button>
+
+    <h2>128x128 Icon</h2>
+    <canvas id="icon128" width="128" height="128"></canvas><br>
+    <button onclick="downloadIcon('icon128', 128)">Download icon128.png</button>
+
+    <div class="info" style="margin-top: 20px;">
+      <strong>Instructions:</strong>
+      <ol>
+        <li>Click each download button to save the icons</li>
+        <li>Save them in the <code>icons/</code> folder with the exact filenames shown</li>
+        <li>The extension will then have proper icons</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    function drawIcon(canvas, size) {
+      const ctx = canvas.getContext('2d');
+      const radius = size * 0.2;
+
+      // Background
+      ctx.fillStyle = '#4285f4';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, size, size, radius);
+      ctx.fill();
+
+      // Play button circle (white background)
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const circleRadius = size * 0.28;
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, circleRadius * 1.15, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, circleRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Play triangle
+      const triangleSize = size * 0.15;
+      ctx.fillStyle = '#4285f4';
+      ctx.beginPath();
+      ctx.moveTo(centerX - triangleSize * 0.3, centerY - triangleSize);
+      ctx.lineTo(centerX + triangleSize * 0.7, centerY);
+      ctx.lineTo(centerX - triangleSize * 0.3, centerY + triangleSize);
+      ctx.closePath();
+      ctx.fill();
+
+      // Skip indicators (if size allows)
+      if (size >= 48) {
+        ctx.fillStyle = 'white';
+        ctx.font = `bold ${size * 0.12}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText('«5', size * 0.3, size * 0.85);
+        ctx.fillText('5»', size * 0.7, size * 0.85);
+      }
+    }
+
+    function downloadIcon(canvasId, size) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = `icon${size}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Draw all icons on page load
+    window.onload = function() {
+      drawIcon(document.getElementById('icon16'), 16);
+      drawIcon(document.getElementById('icon48'), 48);
+      drawIcon(document.getElementById('icon128'), 128);
+    };
+
+    // Polyfill for roundRect if needed
+    if (!CanvasRenderingContext2D.prototype.roundRect) {
+      CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+        this.moveTo(x + radius, y);
+        this.lineTo(x + width - radius, y);
+        this.quadraticCurveTo(x + width, y, x + width, y + radius);
+        this.lineTo(x + width, y + height - radius);
+        this.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        this.lineTo(x + radius, y + height);
+        this.quadraticCurveTo(x, y + height, x, y + height - radius);
+        this.lineTo(x, y + radius);
+        this.quadraticCurveTo(x, y, x + radius, y);
+        this.closePath();
+      };
+    }
+  </script>
+</body>
+</html>

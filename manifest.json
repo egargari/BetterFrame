@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "BetterFrame - Enhanced Frame.io Controls",
+  "version": "1.0.0",
+  "description": "Adds enhanced video controls to Frame.io, including 5-second skip forward/backward buttons",
+  "permissions": [],
+  "host_permissions": [
+    "https://app.frame.io/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://app.frame.io/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+}
