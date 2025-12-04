@@ -757,8 +757,9 @@
 
     const comment = `Please cut the part inside []:\n\n${timestamp} - ${markedText}`;
 
-    addToCommentBox(comment, segment);
+    copyToClipboard(comment, 'Delete comment');
     seekToEstimatedTime(selectedText, segment);
+    focusCommentBox();
   }
 
   /**
@@ -796,8 +797,9 @@
 
     const comment = `Long pause in []:\n\n${markedContext}`;
 
-    addToCommentBox(comment, segment);
+    copyToClipboard(comment, 'Long pause comment');
     seekToEstimatedTime(selectedText, segment);
+    focusCommentBox();
   }
 
   /**
@@ -806,27 +808,93 @@
   function handleUnclearAction(selectedText, segment) {
     const comment = `The following part is unclear to me. Could you please take a look?\n\n${selectedText}`;
 
-    addToCommentBox(comment, segment);
+    copyToClipboard(comment, 'Unclear comment');
     seekToEstimatedTime(selectedText, segment);
+    focusCommentBox();
   }
 
   /**
    * Handle Add to comments action
    */
   function handleAddToCommentsAction(selectedText, segment) {
-    addToCommentBox(selectedText, segment);
+    copyToClipboard(selectedText, 'Selected text');
     seekToEstimatedTime(selectedText, segment);
+    focusCommentBox();
   }
 
   /**
    * Handle Copy action
    */
   function handleCopyAction(selectedText) {
-    navigator.clipboard.writeText(selectedText).then(() => {
-      console.log('[BetterFrame Selection] Text copied to clipboard');
+    copyToClipboard(selectedText, 'Selected text');
+  }
+
+  /**
+   * Copy text to clipboard with notification
+   */
+  function copyToClipboard(text, description) {
+    navigator.clipboard.writeText(text).then(() => {
+      console.log(`[BetterFrame Selection] ✓ ${description} copied to clipboard`);
+      console.log(`[BetterFrame Selection] Text length: ${text.length} characters`);
+      console.log(`[BetterFrame Selection] Preview: ${text.substring(0, 100)}...`);
+      showToast(`✓ ${description} copied! Paste in comment box.`);
     }).catch(err => {
-      console.error('[BetterFrame Selection] Failed to copy text:', err);
+      console.error('[BetterFrame Selection] ✗ Failed to copy text:', err);
+      showToast('✗ Failed to copy to clipboard', true);
     });
+  }
+
+  /**
+   * Focus the comment box to prepare for pasting
+   */
+  function focusCommentBox() {
+    // Try multiple selectors to find the comment input
+    const selectors = [
+      '[data-slate-editor="true"]',
+      '[contenteditable="true"][role="textbox"]',
+      'textarea[placeholder*="comment" i]',
+      'textarea[placeholder*="Add" i]',
+      'textarea',
+      '[contenteditable="true"]'
+    ];
+
+    let commentBox = null;
+    for (const selector of selectors) {
+      commentBox = document.querySelector(selector);
+      if (commentBox && commentBox.offsetParent !== null) {
+        console.log('[BetterFrame Selection] ✓ Found comment box, focusing...');
+        commentBox.focus();
+        commentBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+
+    console.warn('[BetterFrame Selection] ⚠ Could not find comment box to focus');
+  }
+
+  /**
+   * Show a toast notification
+   */
+  function showToast(message, isError = false) {
+    // Remove existing toast
+    const existingToast = document.getElementById('betterframe-toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.id = 'betterframe-toast';
+    toast.className = `betterframe-toast ${isError ? 'betterframe-toast-error' : ''}`;
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      toast.classList.add('betterframe-toast-fade-out');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
 
   /**
