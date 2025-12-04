@@ -514,22 +514,35 @@
    * Adjust page layout to make room for sidebar
    */
   function adjustPageLayout(sidebarVisible) {
-    // Find the media pane container - this is the main video container
-    const mediaPaneContainer = document.getElementById('media-pane-container');
+    // Find the PlayerPageScrollContainer - this holds both video and comments
+    // Try multiple selectors to be resilient to class name changes
+    const selectors = [
+      '[class*="PlayerPageLayout__PlayerPageScrollContainer"]',
+      '.PlayerPageLayout__PlayerPageScrollContainer-g2qz6t-1'
+    ];
 
-    if (mediaPaneContainer) {
+    let scrollContainer = null;
+    for (const selector of selectors) {
+      scrollContainer = document.querySelector(selector);
+      if (scrollContainer) {
+        console.log('[BetterFrame Transcribe] Found scroll container using selector:', selector);
+        break;
+      }
+    }
+
+    if (scrollContainer) {
       if (sidebarVisible) {
-        // Push the media pane container to the right to make room for 400px sidebar
-        mediaPaneContainer.style.marginLeft = '400px';
-        mediaPaneContainer.style.transition = 'margin-left 0.3s ease';
-        console.log('[BetterFrame Transcribe] ✓ Adjusted page layout - pushed #media-pane-container 400px to the right');
+        // Push the entire scroll container (video + comments) to the right
+        scrollContainer.style.marginLeft = '400px';
+        scrollContainer.style.transition = 'margin-left 0.3s ease';
+        console.log('[BetterFrame Transcribe] ✓ Adjusted page layout - pushed scroll container 400px to the right');
       } else {
         // Reset to original position
-        mediaPaneContainer.style.marginLeft = '0px';
+        scrollContainer.style.marginLeft = '0px';
         console.log('[BetterFrame Transcribe] ✓ Reset page layout to original position');
       }
     } else {
-      console.warn('[BetterFrame Transcribe] ⚠ Could not find #media-pane-container to adjust layout');
+      console.warn('[BetterFrame Transcribe] ⚠ Could not find PlayerPageScrollContainer to adjust layout');
       console.warn('[BetterFrame Transcribe] ⚠ Sidebar will overlay content instead of pushing it');
     }
   }
