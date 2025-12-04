@@ -9,8 +9,6 @@
   const CHECK_INTERVAL = 1000; // Check every 1 second for player
   let buttonsInjected = false;
   let transcriptInjected = false;
-  let ffmpegLoaded = false;
-  let ffmpeg = null;
 
   // SVG icons for the buttons
   const BACKWARD_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -106,22 +104,22 @@
   }
 
   /**
-   * Get OpenAI API key from chrome storage
+   * Get AssemblyAI API key from chrome storage
    */
   async function getApiKey() {
     try {
       console.log('[BetterFrame Transcribe] Retrieving API key from storage...');
       return new Promise((resolve, reject) => {
-        chrome.storage.sync.get(['openaiApiKey'], (result) => {
+        chrome.storage.sync.get(['assemblyaiApiKey'], (result) => {
           if (chrome.runtime.lastError) {
             console.error('[BetterFrame Transcribe] Error retrieving API key:', chrome.runtime.lastError);
             reject(chrome.runtime.lastError);
-          } else if (!result.openaiApiKey) {
+          } else if (!result.assemblyaiApiKey) {
             console.error('[BetterFrame Transcribe] No API key found in storage');
-            reject(new Error('No API key found. Please add your OpenAI API key in the extension popup.'));
+            reject(new Error('No API key found. Please add your AssemblyAI API key in the extension popup.'));
           } else {
             console.log('[BetterFrame Transcribe] API key retrieved successfully');
-            resolve(result.openaiApiKey);
+            resolve(result.assemblyaiApiKey);
           }
         });
       });
@@ -156,165 +154,198 @@
   }
 
   /**
-   * Load FFmpeg.wasm library
+   * Upload video to AssemblyAI
    */
-  async function loadFFmpeg() {
-    if (ffmpegLoaded && ffmpeg) {
-      console.log('[BetterFrame Transcribe] FFmpeg already loaded');
-      return ffmpeg;
+  async function uploadVideoToAssemblyAI(videoBlob, apiKey) {
+    console.log('[BetterFrame Transcribe] ========================================');
+    console.log('[BetterFrame Transcribe] STEP 1: Uploading video to AssemblyAI');
+    console.log('[BetterFrame Transcribe] ========================================');
+    console.log('[BetterFrame Transcribe] Video size:', (videoBlob.size / 1024 / 1024).toFixed(2), 'MB');
+    console.log('[BetterFrame Transcribe] Starting upload...');
+
+    const startTime = Date.now();
+    const response = await fetch('https://api.assemblyai.com/v2/upload', {
+      method: 'POST',
+      headers: {
+        'authorization': apiKey,
+        'content-type': 'application/octet-stream'
+      },
+      body: videoBlob
+    });
+
+    const uploadTime = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log('[BetterFrame Transcribe] Upload completed in', uploadTime, 'seconds');
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[BetterFrame Transcribe] Upload error:', errorText);
+      throw new Error(`Upload failed: ${response.status} - ${errorText}`);
     }
 
-    try {
-      console.log('[BetterFrame Transcribe] Loading FFmpeg.wasm...');
+    const data = await response.json();
+    console.log('[BetterFrame Transcribe] ✓ Upload successful!');
+    console.log('[BetterFrame Transcribe] Upload URL:', data.upload_url);
+    return data.upload_url;
+  }
 
-      // Load FFmpeg from CDN if not already loaded
-      if (!window.FFmpegWASM) {
-        console.log('[BetterFrame Transcribe] Loading FFmpeg script from CDN...');
+  /**
+   * Create transcription job
+   */
+  async function createTranscription(uploadUrl, apiKey) {
+    console.log('[BetterFrame Transcribe] ========================================');
+    console.log('[BetterFrame Transcribe] STEP 2: Creating transcription job');
+    console.log('[BetterFrame Transcribe] ========================================');
+    console.log('[BetterFrame Transcribe] Sending request to AssemblyAI...');
 
-        // Try multiple CDNs in case one is blocked
-        const cdnUrls = [
-          'https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.min.js',
-          'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.min.js'
-        ];
+    const response = await fetch('https://api.assemblyai.com/v2/transcript', {
+      method: 'POST',
+      headers: {
+        'authorization': apiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        audio_url: uploadUrl
+      })
+    });
 
-        let loaded = false;
-        for (const url of cdnUrls) {
-          try {
-            console.log(`[BetterFrame Transcribe] Trying CDN: ${url}`);
-            await new Promise((resolve, reject) => {
-              const script = document.createElement('script');
-              script.src = url;
-              script.crossOrigin = 'anonymous';
-              script.onload = () => {
-                console.log('[BetterFrame Transcribe] FFmpeg script loaded from', url);
-                // Wait a bit for the library to initialize
-                setTimeout(resolve, 200);
-              };
-              script.onerror = (e) => {
-                console.error('[BetterFrame Transcribe] Failed to load from', url, e);
-                reject(new Error(`Failed to load from ${url}`));
-              };
-              document.head.appendChild(script);
-            });
-            loaded = true;
-            break;
-          } catch (err) {
-            console.log('[BetterFrame Transcribe] CDN failed, trying next...', err.message);
-          }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[BetterFrame Transcribe] Transcription creation error:', errorText);
+      throw new Error(`Failed to create transcription: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('[BetterFrame Transcribe] ✓ Transcription job created successfully!');
+    console.log('[BetterFrame Transcribe] Job ID:', data.id);
+    console.log('[BetterFrame Transcribe] Status:', data.status);
+    return data.id;
+  }
+
+  /**
+   * Poll for transcription completion
+   */
+  async function pollTranscription(transcriptId, apiKey) {
+    console.log('[BetterFrame Transcribe] ========================================');
+    console.log('[BetterFrame Transcribe] STEP 3: Polling for completion');
+    console.log('[BetterFrame Transcribe] ========================================');
+    console.log('[BetterFrame Transcribe] This may take 1-3 minutes depending on video length...');
+    console.log('[BetterFrame Transcribe] Checking status every 3 seconds...');
+
+    let pollCount = 0;
+    const startTime = Date.now();
+
+    while (true) {
+      pollCount++;
+      const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(0);
+      console.log(`[BetterFrame Transcribe] Poll #${pollCount} (${elapsedTime}s elapsed) - Checking status...`);
+
+      const response = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
+        headers: {
+          'authorization': apiKey
         }
-
-        if (!loaded) {
-          throw new Error('Failed to load FFmpeg from all CDN sources. This may be due to Frame.io CSP restrictions.');
-        }
-      }
-
-      // Verify FFmpegWASM is available
-      if (!window.FFmpegWASM || !window.FFmpegWASM.FFmpeg) {
-        throw new Error('FFmpegWASM library not available after loading');
-      }
-
-      // Create FFmpeg instance
-      console.log('[BetterFrame Transcribe] Creating FFmpeg instance...');
-      const { FFmpeg } = window.FFmpegWASM;
-      ffmpeg = new FFmpeg();
-
-      // Set up logging
-      ffmpeg.on('log', ({ message }) => {
-        console.log('[FFmpeg]', message);
       });
 
-      ffmpeg.on('progress', ({ progress }) => {
-        console.log(`[FFmpeg] Progress: ${(progress * 100).toFixed(1)}%`);
-      });
-
-      // Load FFmpeg core
-      console.log('[BetterFrame Transcribe] Loading FFmpeg core (this may take 10-30 seconds)...');
-
-      // Try loading core with different CDNs
-      try {
-        await ffmpeg.load({
-          coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-          wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
-        });
-      } catch (err) {
-        console.log('[BetterFrame Transcribe] unpkg failed, trying jsdelivr...', err.message);
-        await ffmpeg.load({
-          coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-          wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
-        });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[BetterFrame Transcribe] Polling error:', errorText);
+        throw new Error(`Failed to get transcription status: ${response.status} - ${errorText}`);
       }
 
-      ffmpegLoaded = true;
-      console.log('[BetterFrame Transcribe] FFmpeg loaded successfully!');
-      return ffmpeg;
+      const data = await response.json();
+      console.log(`[BetterFrame Transcribe] Status: ${data.status.toUpperCase()}`);
 
-    } catch (error) {
-      console.error('[BetterFrame Transcribe] Failed to load FFmpeg:', error);
-      ffmpegLoaded = false;
-      ffmpeg = null;
-      throw new Error('Failed to load FFmpeg: ' + error.message);
+      if (data.status === 'completed') {
+        const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        console.log('[BetterFrame Transcribe] ========================================');
+        console.log('[BetterFrame Transcribe] ✓ TRANSCRIPTION COMPLETED!');
+        console.log('[BetterFrame Transcribe] ========================================');
+        console.log('[BetterFrame Transcribe] Total time:', totalTime, 'seconds');
+        console.log('[BetterFrame Transcribe] Text length:', data.text?.length || 0, 'characters');
+        console.log('[BetterFrame Transcribe] Word count:', data.words?.length || 0, 'words');
+        return data;
+      } else if (data.status === 'error') {
+        console.error('[BetterFrame Transcribe] Transcription error:', data.error);
+        throw new Error(`Transcription failed: ${data.error}`);
+      } else if (data.status === 'processing') {
+        console.log('[BetterFrame Transcribe] ⏳ Processing audio... (this is the slowest part)');
+      } else if (data.status === 'queued') {
+        console.log('[BetterFrame Transcribe] 📋 Job queued, waiting to start...');
+      }
+
+      // Wait 3 seconds before next poll
+      console.log('[BetterFrame Transcribe] Waiting 3 seconds before next check...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
   }
 
   /**
-   * Extract audio from video using FFmpeg.wasm
+   * Convert AssemblyAI words to segments (group by sentences/pauses)
    */
-  async function extractAudioFromVideo(videoBlob) {
-    try {
-      console.log('[BetterFrame Transcribe] Extracting audio using FFmpeg.wasm...');
-
-      // Load FFmpeg if not already loaded
-      const ffmpegInstance = await loadFFmpeg();
-
-      // Convert blob to Uint8Array
-      console.log('[BetterFrame Transcribe] Reading video data...');
-      const videoData = new Uint8Array(await videoBlob.arrayBuffer());
-
-      // Write video file to FFmpeg filesystem
-      console.log('[BetterFrame Transcribe] Writing video to FFmpeg filesystem...');
-      await ffmpegInstance.writeFile('input.mp4', videoData);
-
-      // Extract audio as MP3 with compression
-      console.log('[BetterFrame Transcribe] Extracting and compressing audio...');
-      await ffmpegInstance.exec([
-        '-i', 'input.mp4',
-        '-vn',                    // No video
-        '-acodec', 'libmp3lame',  // MP3 codec
-        '-b:a', '64k',            // 64kbps bitrate (good for speech)
-        '-ar', '16000',           // 16kHz sample rate (optimal for Whisper)
-        '-ac', '1',               // Mono
-        'output.mp3'
-      ]);
-
-      // Read the output file
-      console.log('[BetterFrame Transcribe] Reading extracted audio...');
-      const audioData = await ffmpegInstance.readFile('output.mp3');
-
-      // Clean up
-      await ffmpegInstance.deleteFile('input.mp4');
-      await ffmpegInstance.deleteFile('output.mp3');
-
-      // Convert to Blob
-      const audioBlob = new Blob([audioData.buffer], { type: 'audio/mp3' });
-      console.log('[BetterFrame Transcribe] Audio extracted successfully, size:', (audioBlob.size / 1024 / 1024).toFixed(2), 'MB');
-
-      return audioBlob;
-
-    } catch (error) {
-      console.error('[BetterFrame Transcribe] FFmpeg extraction failed:', error);
-      throw error;
+  function convertWordsToSegments(words) {
+    if (!words || words.length === 0) {
+      console.log('[BetterFrame Transcribe] No words to convert to segments');
+      return [];
     }
+
+    console.log('[BetterFrame Transcribe] Converting', words.length, 'words into segments...');
+    console.log('[BetterFrame Transcribe] Grouping by sentences and pauses...');
+
+    const segments = [];
+    let currentSegment = {
+      start: words[0].start / 1000, // Convert ms to seconds
+      end: words[0].end / 1000,
+      text: ''
+    };
+
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      const wordStart = word.start / 1000;
+      const wordEnd = word.end / 1000;
+
+      // Add word to current segment
+      currentSegment.text += (currentSegment.text ? ' ' : '') + word.text;
+      currentSegment.end = wordEnd;
+
+      // Check if we should start a new segment
+      // (after punctuation or if there's a pause > 1 second)
+      const isPunctuation = /[.!?]$/.test(word.text);
+      const nextWordGap = i < words.length - 1 ? (words[i + 1].start / 1000 - wordEnd) : 0;
+      const shouldBreak = isPunctuation || nextWordGap > 1.0;
+
+      if (shouldBreak || i === words.length - 1) {
+        segments.push({ ...currentSegment });
+
+        if (i < words.length - 1) {
+          currentSegment = {
+            start: words[i + 1].start / 1000,
+            end: words[i + 1].end / 1000,
+            text: ''
+          };
+        }
+      }
+    }
+
+    console.log('[BetterFrame Transcribe] ✓ Created', segments.length, 'segments');
+    return segments;
   }
 
   /**
-   * Call OpenAI Whisper API to transcribe video
+   * Transcribe video using AssemblyAI
    */
   async function transcribeVideo(videoUrl, apiKey) {
     try {
-      console.log('[BetterFrame Transcribe] Starting transcription process...');
+      console.log('[BetterFrame Transcribe] ╔════════════════════════════════════════════════╗');
+      console.log('[BetterFrame Transcribe] ║   STARTING VIDEO TRANSCRIPTION PROCESS      ║');
+      console.log('[BetterFrame Transcribe] ╚════════════════════════════════════════════════╝');
+      console.log('[BetterFrame Transcribe]');
+      console.log('[BetterFrame Transcribe] Video URL:', videoUrl.substring(0, 80) + '...');
 
-      // First, we need to fetch the video as a blob
-      console.log('[BetterFrame Transcribe] Fetching video file...');
+      // Fetch video file
+      console.log('[BetterFrame Transcribe]');
+      console.log('[BetterFrame Transcribe] ========================================');
+      console.log('[BetterFrame Transcribe] STEP 0: Fetching video from Frame.io');
+      console.log('[BetterFrame Transcribe] ========================================');
+      const fetchStartTime = Date.now();
       const videoResponse = await fetch(videoUrl);
       if (!videoResponse.ok) {
         throw new Error(`Failed to fetch video: ${videoResponse.statusText}`);
@@ -322,165 +353,101 @@
 
       const videoBlob = await videoResponse.blob();
       const videoSizeMB = videoBlob.size / 1024 / 1024;
-      console.log('[BetterFrame Transcribe] Video fetched, size:', videoSizeMB.toFixed(2), 'MB');
+      const fetchTime = ((Date.now() - fetchStartTime) / 1000).toFixed(2);
+      console.log('[BetterFrame Transcribe] ✓ Video fetched successfully!');
+      console.log('[BetterFrame Transcribe] Size:', videoSizeMB.toFixed(2), 'MB');
+      console.log('[BetterFrame Transcribe] Download time:', fetchTime, 'seconds');
+      console.log('[BetterFrame Transcribe]');
 
-      // Whisper API has a 25MB limit
-      const MAX_SIZE_MB = 25;
-      const EXTRACT_AUDIO_THRESHOLD_MB = 5; // Always extract audio for videos > 5MB using FFmpeg
+      // Upload to AssemblyAI
+      const uploadUrl = await uploadVideoToAssemblyAI(videoBlob, apiKey);
+      console.log('[BetterFrame Transcribe]');
 
-      let fileToUpload = videoBlob;
-      let fileName = 'video.mp4';
+      // Create transcription job
+      const transcriptId = await createTranscription(uploadUrl, apiKey);
+      console.log('[BetterFrame Transcribe]');
 
-      // Always try to extract audio if video is large (FFmpeg handles CORS issues)
-      if (videoSizeMB > EXTRACT_AUDIO_THRESHOLD_MB) {
-        console.log(`[BetterFrame Transcribe] Video is ${videoSizeMB.toFixed(2)}MB, extracting audio with FFmpeg...`);
-        console.log('[BetterFrame Transcribe] This may take 10-30 seconds on first use (loading FFmpeg)...');
+      // Poll for completion
+      const result = await pollTranscription(transcriptId, apiKey);
+      console.log('[BetterFrame Transcribe]');
 
-        try {
-          const audioBlob = await extractAudioFromVideo(videoBlob);
-          const audioSizeMB = audioBlob.size / 1024 / 1024;
-
-          console.log('[BetterFrame Transcribe] Audio extraction complete');
-          console.log('[BetterFrame Transcribe] Original video:', videoSizeMB.toFixed(2), 'MB');
-          console.log('[BetterFrame Transcribe] Extracted audio:', audioSizeMB.toFixed(2), 'MB');
-
-          // Check if audio extraction produced valid data
-          if (audioSizeMB < 0.01) {
-            throw new Error('Audio extraction produced empty file');
-          }
-
-          console.log('[BetterFrame Transcribe] Size reduction:', ((1 - audioSizeMB / videoSizeMB) * 100).toFixed(1), '%');
-
-          if (audioSizeMB > MAX_SIZE_MB) {
-            throw new Error(
-              `Audio file is still too large (${audioSizeMB.toFixed(2)}MB) after extraction.\n\n` +
-              `The video is too long. OpenAI Whisper has a ${MAX_SIZE_MB}MB limit.\n\n` +
-              `Please use a shorter video clip (under ${Math.floor((MAX_SIZE_MB / audioSizeMB) * (videoBlob.size / 1024 / 1024 / audioSizeMB))} minutes).`
-            );
-          }
-
-          fileToUpload = audioBlob;
-          fileName = 'audio.mp3';
-
-        } catch (extractError) {
-          console.error('[BetterFrame Transcribe] FFmpeg audio extraction failed:', extractError);
-
-          // If extraction fails and video is over limit, throw error
-          if (videoSizeMB > MAX_SIZE_MB) {
-            throw new Error(
-              `Video file is too large (${videoSizeMB.toFixed(2)}MB) and audio extraction failed.\n\n` +
-              `Error: ${extractError.message}\n\n` +
-              `Please try a shorter video (under ${MAX_SIZE_MB}MB).`
-            );
-          }
-
-          // If extraction fails but video is under limit, use original video
-          console.log('[BetterFrame Transcribe] Falling back to sending original video file');
-          fileToUpload = videoBlob;
-          fileName = 'video.mp4';
-        }
-      } else if (videoSizeMB > MAX_SIZE_MB) {
-        // Small video but somehow over limit (shouldn't happen)
-        throw new Error(
-          `Video file is too large (${videoSizeMB.toFixed(2)}MB).\n\n` +
-          `OpenAI Whisper has a ${MAX_SIZE_MB}MB file size limit.\n\n` +
-          `Please use a shorter video clip.`
-        );
-      }
-
-      // Create form data for Whisper API
-      const formData = new FormData();
-      formData.append('file', fileToUpload, fileName);
-      formData.append('model', 'whisper-1');
-      formData.append('response_format', 'verbose_json');
-      formData.append('timestamp_granularities[]', 'segment');
-
-      console.log('[BetterFrame Transcribe] Uploading to OpenAI Whisper API...');
-      console.log('[BetterFrame Transcribe] File:', fileName, 'Size:', (fileToUpload.size / 1024 / 1024).toFixed(2), 'MB');
-
-      // Call Whisper API
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[BetterFrame Transcribe] API error response:', errorText);
-
-        // Parse error for better user message
-        let errorMessage = `Whisper API error: ${response.status}`;
-        try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson.error && errorJson.error.message) {
-            errorMessage = errorJson.error.message;
-          }
-        } catch (e) {
-          errorMessage += ` - ${errorText}`;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-      console.log('[BetterFrame Transcribe] Transcription completed successfully');
-      console.log('[BetterFrame Transcribe] Transcript preview:', result.text?.substring(0, 100) + '...');
-
-      // Log full transcript for debugging
-      console.log('[BetterFrame Transcribe] === FULL TRANSCRIPT ===');
+      // Log full transcript
+      console.log('[BetterFrame Transcribe] ========================================');
+      console.log('[BetterFrame Transcribe] FULL TRANSCRIPT TEXT:');
+      console.log('[BetterFrame Transcribe] ========================================');
       console.log(result.text);
-      console.log('[BetterFrame Transcribe] === END TRANSCRIPT ===');
+      console.log('[BetterFrame Transcribe] ========================================');
+      console.log('[BetterFrame Transcribe]');
 
-      if (result.segments && result.segments.length > 0) {
-        console.log(`[BetterFrame Transcribe] Total segments: ${result.segments.length}`);
-        console.log('[BetterFrame Transcribe] First few segments:');
-        result.segments.slice(0, 5).forEach((seg, i) => {
-          console.log(`  ${i + 1}. [${formatTimestamp(seg.start)}] ${seg.text}`);
+      // Convert AssemblyAI format to our format
+      const segments = result.words ? convertWordsToSegments(result.words) : [];
+
+      if (segments.length > 0) {
+        console.log('[BetterFrame Transcribe] ========================================');
+        console.log('[BetterFrame Transcribe] PREVIEW OF FIRST 5 SEGMENTS:');
+        console.log('[BetterFrame Transcribe] ========================================');
+        segments.slice(0, 5).forEach((seg, i) => {
+          console.log(`[BetterFrame Transcribe]  ${i + 1}. [${formatTimestamp(seg.start)}] ${seg.text}`);
         });
+        console.log('[BetterFrame Transcribe] ========================================');
+        console.log('[BetterFrame Transcribe]');
       }
 
-      return result;
+      return {
+        text: result.text,
+        segments: segments
+      };
     } catch (error) {
-      console.error('[BetterFrame Transcribe] Error during transcription:', error);
+      console.error('[BetterFrame Transcribe] ❌ ERROR during transcription:', error);
       throw error;
     }
   }
 
   /**
-   * Create and display transcript UI
+   * Create and display transcript UI as a sidebar
    */
   function createTranscriptUI(transcriptData) {
     try {
-      console.log('[BetterFrame Transcribe] Creating transcript UI...');
-
-      // Find the comments container
-      const commentsContainer = document.querySelector('.PlayerPageLayout__ComposerContainerOuter-g2qz6t-7.dZIRvZ');
-      if (!commentsContainer) {
-        throw new Error('Comments container not found');
-      }
+      console.log('[BetterFrame Transcribe] ========================================');
+      console.log('[BetterFrame Transcribe] STEP 4: Creating transcript sidebar UI');
+      console.log('[BetterFrame Transcribe] ========================================');
 
       // Remove existing transcript if any
-      const existingTranscript = document.getElementById('betterframe-transcript');
+      const existingTranscript = document.getElementById('betterframe-transcript-sidebar');
+      const existingToggle = document.getElementById('betterframe-transcript-toggle');
       if (existingTranscript) {
         existingTranscript.remove();
       }
+      if (existingToggle) {
+        existingToggle.remove();
+      }
 
-      // Create transcript container
-      const transcriptContainer = document.createElement('div');
-      transcriptContainer.id = 'betterframe-transcript';
-      transcriptContainer.className = 'betterframe-transcript-container';
+      // Create transcript sidebar container
+      const sidebar = document.createElement('div');
+      sidebar.id = 'betterframe-transcript-sidebar';
+      sidebar.className = 'betterframe-transcript-sidebar';
 
-      // Create header
+      // Create header with close button
       const header = document.createElement('div');
       header.className = 'betterframe-transcript-header';
-      header.innerHTML = '<h3>AI Transcript</h3>';
+
+      const title = document.createElement('h3');
+      title.textContent = 'AI Transcript';
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'betterframe-transcript-close';
+      closeBtn.innerHTML = '×';
+      closeBtn.setAttribute('aria-label', 'Close transcript');
+      closeBtn.onclick = () => toggleTranscriptSidebar();
+
+      header.appendChild(title);
+      header.appendChild(closeBtn);
 
       // Create content area
       const content = document.createElement('div');
       content.className = 'betterframe-transcript-content';
+
+      console.log('[BetterFrame Transcribe] Adding', transcriptData.segments?.length || 0, 'segments to sidebar...');
 
       // Add segments with timestamps
       if (transcriptData.segments && transcriptData.segments.length > 0) {
@@ -502,8 +469,6 @@
           segmentEl.appendChild(timestamp);
           segmentEl.appendChild(text);
           content.appendChild(segmentEl);
-
-          console.log(`[BetterFrame Transcribe] Added segment ${index + 1}:`, segment.text.substring(0, 30) + '...');
         });
       } else {
         // If no segments, just show the full text
@@ -512,13 +477,29 @@
         content.appendChild(textEl);
       }
 
-      transcriptContainer.appendChild(header);
-      transcriptContainer.appendChild(content);
+      sidebar.appendChild(header);
+      sidebar.appendChild(content);
 
-      // Insert before comments container
-      commentsContainer.parentNode.insertBefore(transcriptContainer, commentsContainer);
+      // Insert sidebar into document body
+      document.body.appendChild(sidebar);
 
-      console.log('[BetterFrame Transcribe] Transcript UI created successfully');
+      // Adjust page layout to make room for sidebar
+      adjustPageLayout(true);
+
+      // Create toggle button
+      const toggleBtn = document.createElement('button');
+      toggleBtn.id = 'betterframe-transcript-toggle';
+      toggleBtn.className = 'betterframe-transcript-toggle';
+      toggleBtn.innerHTML = '✕';  // Start with close icon since sidebar is visible
+      toggleBtn.setAttribute('aria-label', 'Toggle transcript');
+      toggleBtn.setAttribute('title', 'Hide Transcript');
+      toggleBtn.onclick = () => toggleTranscriptSidebar();
+
+      document.body.appendChild(toggleBtn);
+
+      console.log('[BetterFrame Transcribe] ✓ Transcript sidebar created successfully!');
+      console.log('[BetterFrame Transcribe] ✓ Page layout adjusted');
+      console.log('[BetterFrame Transcribe] ✓ All done! Click timestamps to jump to that time.');
 
       // Add timestamp interactivity
       addTimestampInteractivity();
@@ -526,6 +507,74 @@
     } catch (error) {
       console.error('[BetterFrame Transcribe] Error creating transcript UI:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Adjust page layout to make room for sidebar
+   */
+  function adjustPageLayout(sidebarVisible) {
+    // Try multiple selectors to find the main scroll container
+    // This makes it more resilient to Frame.io UI changes
+    const selectors = [
+      '[class*="PlayerPageLayout"][class*="ScrollContainer"]',  // Catch any PlayerPageLayout ScrollContainer
+      '.PlayerPageLayout__PlayerPageScrollContainer-g2qz6t-1',   // Original specific class
+      '[class*="PlayerPageScrollContainer"]',                     // Any scroll container
+      'div[class*="PlayerPage"] > div'                           // Fallback to PlayerPage children
+    ];
+
+    let scrollContainer = null;
+
+    // Try each selector until we find a match
+    for (const selector of selectors) {
+      scrollContainer = document.querySelector(selector);
+      if (scrollContainer) {
+        console.log('[BetterFrame Transcribe] Found layout container using selector:', selector);
+        break;
+      }
+    }
+
+    if (scrollContainer) {
+      if (sidebarVisible) {
+        // Push entire page content to the right to make room for 400px sidebar
+        scrollContainer.style.paddingLeft = '400px';
+        scrollContainer.style.transition = 'padding-left 0.3s ease';
+        console.log('[BetterFrame Transcribe] ✓ Adjusted page layout - added 400px left padding');
+      } else {
+        // Reset to original position
+        scrollContainer.style.paddingLeft = '0px';
+        console.log('[BetterFrame Transcribe] ✓ Reset page layout to original position');
+      }
+    } else {
+      console.warn('[BetterFrame Transcribe] ⚠ Could not find scroll container to adjust layout');
+      console.warn('[BetterFrame Transcribe] ⚠ Sidebar will overlay content instead of pushing it');
+    }
+  }
+
+  /**
+   * Toggle transcript sidebar visibility
+   */
+  function toggleTranscriptSidebar() {
+    const sidebar = document.getElementById('betterframe-transcript-sidebar');
+    const toggleBtn = document.getElementById('betterframe-transcript-toggle');
+
+    if (sidebar) {
+      const isHidden = sidebar.classList.contains('hidden');
+      sidebar.classList.toggle('hidden');
+
+      // Adjust page layout
+      adjustPageLayout(!isHidden ? false : true);
+
+      // Update toggle button
+      if (toggleBtn) {
+        if (sidebar.classList.contains('hidden')) {
+          toggleBtn.innerHTML = '📝';
+          toggleBtn.setAttribute('title', 'Show Transcript');
+        } else {
+          toggleBtn.innerHTML = '✕';
+          toggleBtn.setAttribute('title', 'Hide Transcript');
+        }
+      }
     }
   }
 
