@@ -626,9 +626,49 @@
       });
 
       console.log(`[BetterFrame Transcribe] Added interactivity to ${segments.length} segments`);
+
+      // Add video timeupdate listener to highlight current segment
+      video.addEventListener('timeupdate', () => {
+        updateCurrentSegmentHighlight(video.currentTime);
+      });
+
+      console.log('[BetterFrame Transcribe] Added video timeupdate listener for auto-highlighting');
     } catch (error) {
       console.error('[BetterFrame Transcribe] Error adding timestamp interactivity:', error);
     }
+  }
+
+  /**
+   * Update the highlighted segment based on current video time
+   */
+  function updateCurrentSegmentHighlight(currentTime) {
+    const segments = document.querySelectorAll('.betterframe-transcript-segment');
+    const transcriptContent = document.querySelector('.betterframe-transcript-content');
+
+    segments.forEach((segment) => {
+      const startTime = parseFloat(segment.dataset.startTime);
+      const endTime = parseFloat(segment.dataset.endTime);
+
+      // Check if current time is within this segment's range
+      if (currentTime >= startTime && currentTime < endTime) {
+        segment.classList.add('betterframe-transcript-segment-playing');
+
+        // Auto-scroll to keep the playing segment visible
+        if (transcriptContent) {
+          const segmentTop = segment.offsetTop;
+          const segmentHeight = segment.offsetHeight;
+          const contentScrollTop = transcriptContent.scrollTop;
+          const contentHeight = transcriptContent.clientHeight;
+
+          // Scroll if segment is not fully visible
+          if (segmentTop < contentScrollTop || segmentTop + segmentHeight > contentScrollTop + contentHeight) {
+            segment.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      } else {
+        segment.classList.remove('betterframe-transcript-segment-playing');
+      }
+    });
   }
 
   /**
