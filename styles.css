@@ -250,3 +250,47 @@
 .betterframe-transcript-content::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* Selection Menu Styles */
+.betterframe-selection-menu {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 100001;
+  animation: betterframe-fade-in 0.2s ease;
+}
+
+.betterframe-selection-button {
+  background: white;
+  border: 1px solid #ddd;
+  color: #333;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.betterframe-selection-button:hover {
+  background: #f0f0f0;
+  border-color: #2196F3;
+  color: #2196F3;
+  transform: translateY(-1px);
+}
+
+.betterframe-selection-button:active {
+  transform: translateY(0);
+}
+
+/* Make transcript text selectable */
+.betterframe-transcript-text {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}

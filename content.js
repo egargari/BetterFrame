@@ -633,9 +633,289 @@
       });
 
       console.log('[BetterFrame Transcribe] Added video timeupdate listener for auto-highlighting');
+
+      // Add text selection handler
+      addTextSelectionHandler();
     } catch (error) {
       console.error('[BetterFrame Transcribe] Error adding timestamp interactivity:', error);
     }
+  }
+
+  /**
+   * Add text selection handler for transcript actions
+   */
+  function addTextSelectionHandler() {
+    const transcriptContent = document.querySelector('.betterframe-transcript-content');
+
+    if (!transcriptContent) {
+      console.error('[BetterFrame Selection] Transcript content not found');
+      return;
+    }
+
+    // Remove existing selection menu if any
+    let existingMenu = document.getElementById('betterframe-selection-menu');
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+
+    // Listen for text selection
+    transcriptContent.addEventListener('mouseup', (e) => {
+      handleTextSelection(e);
+    });
+
+    // Hide menu when clicking elsewhere
+    document.addEventListener('mousedown', (e) => {
+      const menu = document.getElementById('betterframe-selection-menu');
+      if (menu && !menu.contains(e.target)) {
+        menu.remove();
+      }
+    });
+
+    console.log('[BetterFrame Selection] Text selection handler added');
+  }
+
+  /**
+   * Handle text selection in transcript
+   */
+  function handleTextSelection(e) {
+    const selection = window.getSelection();
+    const selectedText = selection.toString().trim();
+
+    // Remove existing menu
+    let existingMenu = document.getElementById('betterframe-selection-menu');
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+
+    if (!selectedText || selectedText.length === 0) {
+      return;
+    }
+
+    // Find which segment contains the selection
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+    const segment = container.nodeType === 3 ?
+      container.parentElement.closest('.betterframe-transcript-segment') :
+      container.closest('.betterframe-transcript-segment');
+
+    if (!segment) {
+      console.warn('[BetterFrame Selection] Could not find segment for selection');
+      return;
+    }
+
+    // Create selection menu
+    createSelectionMenu(selectedText, segment, range);
+  }
+
+  /**
+   * Create floating menu with action buttons
+   */
+  function createSelectionMenu(selectedText, segment, range) {
+    const menu = document.createElement('div');
+    menu.id = 'betterframe-selection-menu';
+    menu.className = 'betterframe-selection-menu';
+
+    // Position menu near selection
+    const rect = range.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = `${rect.top - 50}px`;
+    menu.style.left = `${rect.left + (rect.width / 2)}px`;
+    menu.style.transform = 'translateX(-50%)';
+
+    // Create action buttons
+    const actions = [
+      { label: 'Delete', action: () => handleDeleteAction(selectedText, segment) },
+      { label: 'Long pause', action: () => handleLongPauseAction(selectedText, segment) },
+      { label: 'Unclear', action: () => handleUnclearAction(selectedText, segment) },
+      { label: 'Add to comments', action: () => handleAddToCommentsAction(selectedText, segment) },
+      { label: 'Copy', action: () => handleCopyAction(selectedText) }
+    ];
+
+    actions.forEach(({ label, action }) => {
+      const button = document.createElement('button');
+      button.className = 'betterframe-selection-button';
+      button.textContent = label;
+      button.onclick = () => {
+        action();
+        menu.remove();
+        window.getSelection().removeAllRanges();
+      };
+      menu.appendChild(button);
+    });
+
+    document.body.appendChild(menu);
+  }
+
+  /**
+   * Handle Delete action
+   */
+  function handleDeleteAction(selectedText, segment) {
+    const timestamp = segment.querySelector('.betterframe-transcript-timestamp').textContent;
+    const fullText = segment.querySelector('.betterframe-transcript-text').textContent;
+    const markedText = fullText.replace(selectedText, `[${selectedText}]`);
+
+    const comment = `Please cut the part inside []:\n\n${timestamp} - ${markedText}`;
+
+    addToCommentBox(comment, segment);
+    seekToEstimatedTime(selectedText, segment);
+  }
+
+  /**
+   * Handle Long pause action
+   */
+  function handleLongPauseAction(selectedText, segment) {
+    const fullText = segment.querySelector('.betterframe-transcript-text').textContent;
+    const words = fullText.split(/\s+/);
+    const selectedWords = selectedText.split(/\s+/);
+
+    // Find position of selected text
+    const selectedIndex = words.findIndex((word, idx) => {
+      const phrase = words.slice(idx, idx + selectedWords.length).join(' ');
+      return phrase.includes(selectedText) || selectedText.includes(phrase);
+    });
+
+    if (selectedIndex === -1) {
+      console.warn('[BetterFrame Selection] Could not find selected text in segment');
+      return;
+    }
+
+    // Get 4 words before and 3 words after
+    const startIdx = Math.max(0, selectedIndex - 4);
+    const endIdx = Math.min(words.length, selectedIndex + selectedWords.length + 3);
+    const contextWords = words.slice(startIdx, endIdx);
+
+    // Mark the selected part
+    const markedContext = contextWords.map((word, idx) => {
+      const absoluteIdx = startIdx + idx;
+      if (absoluteIdx >= selectedIndex && absoluteIdx < selectedIndex + selectedWords.length) {
+        return `[${word}]`;
+      }
+      return word;
+    }).join(' ');
+
+    const comment = `Long pause in []:\n\n${markedContext}`;
+
+    addToCommentBox(comment, segment);
+    seekToEstimatedTime(selectedText, segment);
+  }
+
+  /**
+   * Handle Unclear action
+   */
+  function handleUnclearAction(selectedText, segment) {
+    const comment = `The following part is unclear to me. Could you please take a look?\n\n${selectedText}`;
+
+    addToCommentBox(comment, segment);
+    seekToEstimatedTime(selectedText, segment);
+  }
+
+  /**
+   * Handle Add to comments action
+   */
+  function handleAddToCommentsAction(selectedText, segment) {
+    addToCommentBox(selectedText, segment);
+    seekToEstimatedTime(selectedText, segment);
+  }
+
+  /**
+   * Handle Copy action
+   */
+  function handleCopyAction(selectedText) {
+    navigator.clipboard.writeText(selectedText).then(() => {
+      console.log('[BetterFrame Selection] Text copied to clipboard');
+    }).catch(err => {
+      console.error('[BetterFrame Selection] Failed to copy text:', err);
+    });
+  }
+
+  /**
+   * Add text to Frame.io comment box
+   */
+  function addToCommentBox(text, segment) {
+    // Try multiple selectors to find the comment input
+    const selectors = [
+      'textarea[placeholder*="comment" i]',
+      'textarea[placeholder*="Add" i]',
+      'textarea[data-testid*="comment" i]',
+      '[contenteditable="true"][role="textbox"]',
+      'textarea',
+      '[contenteditable="true"]'
+    ];
+
+    let commentBox = null;
+    for (const selector of selectors) {
+      commentBox = document.querySelector(selector);
+      if (commentBox && commentBox.offsetParent !== null) {
+        console.log('[BetterFrame Selection] Found comment box using selector:', selector);
+        break;
+      }
+    }
+
+    if (!commentBox) {
+      console.error('[BetterFrame Selection] Could not find comment box');
+      alert('Could not find comment box. Please make sure the comments panel is visible.');
+      return;
+    }
+
+    // Set the text
+    if (commentBox.tagName === 'TEXTAREA' || commentBox.tagName === 'INPUT') {
+      commentBox.value = text;
+      commentBox.dispatchEvent(new Event('input', { bubbles: true }));
+    } else if (commentBox.contentEditable === 'true') {
+      commentBox.textContent = text;
+      commentBox.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    // Focus the comment box
+    commentBox.focus();
+
+    // Scroll to comment box
+    commentBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    console.log('[BetterFrame Selection] Added text to comment box and focused');
+  }
+
+  /**
+   * Seek video to estimated time of selected text
+   */
+  function seekToEstimatedTime(selectedText, segment) {
+    const video = findVideoElement();
+    if (!video) {
+      console.error('[BetterFrame Selection] Video element not found');
+      return;
+    }
+
+    const segmentText = segment.querySelector('.betterframe-transcript-text').textContent;
+    const segmentStart = parseFloat(segment.dataset.startTime);
+    const segmentEnd = parseFloat(segment.dataset.endTime);
+    const segmentDuration = segmentEnd - segmentStart;
+
+    // Calculate word-based position
+    const words = segmentText.split(/\s+/);
+    const totalWords = words.length;
+    const selectedWords = selectedText.split(/\s+/);
+
+    // Find position of selected text in words
+    let selectedStartWord = 0;
+    for (let i = 0; i < words.length; i++) {
+      const phrase = words.slice(i, i + selectedWords.length).join(' ');
+      if (phrase.includes(selectedText) || selectedText.includes(phrase)) {
+        selectedStartWord = i;
+        break;
+      }
+    }
+
+    // Calculate time per word
+    const timePerWord = segmentDuration / totalWords;
+
+    // Estimate start time of selected text
+    const estimatedTime = segmentStart + (selectedStartWord * timePerWord);
+
+    // Seek to 3-4 words before (approximately 7.5-10 seconds before, or 3*timePerWord)
+    const seekTime = Math.max(segmentStart, estimatedTime - (3 * timePerWord));
+
+    video.currentTime = seekTime;
+    console.log(`[BetterFrame Selection] Seeked to ${seekTime.toFixed(2)}s (estimated start of selected text)`);
   }
 
   /**
