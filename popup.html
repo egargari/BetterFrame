@@ -100,6 +100,72 @@
       color: #2e7d32;
       margin-bottom: 15px;
     }
+
+    .input-group {
+      margin-bottom: 12px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+      box-sizing: border-box;
+      font-family: monospace;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: #4285f4;
+    }
+
+    .btn {
+      background: #4285f4;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      width: 100%;
+      font-weight: 500;
+    }
+
+    .btn:hover {
+      background: #3367d6;
+    }
+
+    .btn:active {
+      background: #2c5bb3;
+    }
+
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .success-message {
+      font-size: 11px;
+      color: #4CAF50;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .error-message {
+      font-size: 11px;
+      color: #f44336;
+      margin-top: 8px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -113,10 +179,29 @@
   </div>
 
   <div class="section">
+    <h2>OpenAI Configuration</h2>
+    <div class="input-group">
+      <label for="apiKey">OpenAI API Key</label>
+      <input type="password" id="apiKey" placeholder="sk-...">
+    </div>
+    <button class="btn" id="saveKey">Save API Key</button>
+    <div class="success-message" id="successMessage">✓ API key saved successfully</div>
+    <div class="error-message" id="errorMessage">✗ Failed to save API key</div>
+  </div>
+
+  <div class="section">
     <h2>Features</h2>
     <div class="feature">5-second skip forward button</div>
     <div class="feature">5-second skip backward button</div>
     <div class="feature">Keyboard shortcuts</div>
+    <div class="feature">AI transcription (Whisper + FFmpeg)</div>
+  </div>
+
+  <div class="section">
+    <h2>About Transcription</h2>
+    <p style="font-size: 11px; color: #666; line-height: 1.4; margin: 0;">
+      Uses FFmpeg.wasm to extract audio from videos (loads on first use). Works with videos of any size!
+    </p>
   </div>
 
   <div class="section">
@@ -134,5 +219,6 @@
   <div class="footer">
     Made with ♥ for better Frame.io experience
   </div>
+  <script src="popup.js"></script>
 </body>
 </html>
