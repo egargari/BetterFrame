@@ -514,35 +514,36 @@
    * Adjust page layout to make room for sidebar
    */
   function adjustPageLayout(sidebarVisible) {
-    // Find the PlayerPageScrollContainer - this holds both video and comments
+    // Find the ReviewLinkPlayer container - this is the main player container
     // Try multiple selectors to be resilient to class name changes
     const selectors = [
-      '[class*="PlayerPageLayout__PlayerPageScrollContainer"]',
-      '.PlayerPageLayout__PlayerPageScrollContainer-g2qz6t-1'
+      '[class*="ReviewLinkPlayer__Container"]',  // Catch any ReviewLinkPlayer__Container
+      '.ReviewLinkPlayer__Container-sc-26kaec-0',  // Specific class without hash
+      '[class^="ReviewLinkPlayer__Container-sc"]'  // Any ReviewLinkPlayer container with sc prefix
     ];
 
-    let scrollContainer = null;
+    let playerContainer = null;
     for (const selector of selectors) {
-      scrollContainer = document.querySelector(selector);
-      if (scrollContainer) {
-        console.log('[BetterFrame Transcribe] Found scroll container using selector:', selector);
+      playerContainer = document.querySelector(selector);
+      if (playerContainer) {
+        console.log('[BetterFrame Transcribe] Found player container using selector:', selector);
         break;
       }
     }
 
-    if (scrollContainer) {
+    if (playerContainer) {
       if (sidebarVisible) {
-        // Push the entire scroll container (video + comments) to the right
-        scrollContainer.style.marginLeft = '400px';
-        scrollContainer.style.transition = 'margin-left 0.3s ease';
-        console.log('[BetterFrame Transcribe] ✓ Adjusted page layout - pushed scroll container 400px to the right');
+        // Push the entire player container (video + comments + everything) to the right
+        playerContainer.style.marginLeft = '400px';
+        playerContainer.style.transition = 'margin-left 0.3s ease';
+        console.log('[BetterFrame Transcribe] ✓ Adjusted page layout - pushed ReviewLinkPlayer container 400px to the right');
       } else {
         // Reset to original position
-        scrollContainer.style.marginLeft = '0px';
+        playerContainer.style.marginLeft = '0px';
         console.log('[BetterFrame Transcribe] ✓ Reset page layout to original position');
       }
     } else {
-      console.warn('[BetterFrame Transcribe] ⚠ Could not find PlayerPageScrollContainer to adjust layout');
+      console.warn('[BetterFrame Transcribe] ⚠ Could not find ReviewLinkPlayer container to adjust layout');
       console.warn('[BetterFrame Transcribe] ⚠ Sidebar will overlay content instead of pushing it');
     }
   }
