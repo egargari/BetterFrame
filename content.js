@@ -899,83 +899,27 @@
 
         console.log('[BetterFrame Selection] Set textarea value and cursor position');
       } else if (commentBox.contentEditable === 'true') {
-        console.log('[BetterFrame Selection] Using contenteditable method (Slate editor)');
+        console.log('[BetterFrame Selection] Using contenteditable method');
 
-        // Check if this is a Slate editor
-        const isSlateEditor = commentBox.hasAttribute('data-slate-editor');
-        console.log('[BetterFrame Selection] Is Slate editor:', isSlateEditor);
+        // Clear first
+        commentBox.textContent = '';
 
-        // Clear existing content
-        commentBox.innerHTML = '';
-
-        if (isSlateEditor) {
-          // Build proper Slate.js structure exactly as Frame.io expects
-          console.log('[BetterFrame Selection] Building Slate editor structure');
-
-          // Split text by newlines to create paragraphs
-          const lines = text.split('\n');
-          console.log('[BetterFrame Selection] Creating', lines.length, 'paragraph(s)');
-
-          lines.forEach((line) => {
-            // Create: <p data-slate-node="element">
-            const paragraph = document.createElement('p');
-            paragraph.setAttribute('data-slate-node', 'element');
-
-            // Create: <span data-slate-node="text">
-            const textSpan = document.createElement('span');
-            textSpan.setAttribute('data-slate-node', 'text');
-
-            // Create: <span data-slate-leaf="true">
-            const leafSpan = document.createElement('span');
-            leafSpan.setAttribute('data-slate-leaf', 'true');
-
-            // Create: <span data-slate-string="true">Text content</span>
-            const stringSpan = document.createElement('span');
-            stringSpan.setAttribute('data-slate-string', 'true');
-            stringSpan.textContent = line || '\u200B'; // Use zero-width space for empty lines
-
-            // Build the hierarchy: p > span[text] > span[leaf] > span[string]
-            leafSpan.appendChild(stringSpan);
-            textSpan.appendChild(leafSpan);
-            paragraph.appendChild(textSpan);
-            commentBox.appendChild(paragraph);
-          });
-
-          console.log('[BetterFrame Selection] Slate structure created successfully');
-        } else {
-          // Fallback for non-Slate contenteditable
-          console.log('[BetterFrame Selection] Using regular contenteditable (non-Slate)');
-          const textNode = document.createTextNode(text);
-          commentBox.appendChild(textNode);
-        }
+        // For contenteditable, insert text at cursor
+        const textNode = document.createTextNode(text);
+        commentBox.appendChild(textNode);
 
         // Dispatch input events
         commentBox.dispatchEvent(new Event('focus', { bubbles: true }));
         commentBox.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
         commentBox.dispatchEvent(new Event('change', { bubbles: true }));
+        commentBox.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true }));
+        commentBox.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true }));
 
         // Set cursor to end
         const range = document.createRange();
         const sel = window.getSelection();
-
-        // Find the last text node in the Slate structure
-        if (isSlateEditor && commentBox.lastChild) {
-          const lastParagraph = commentBox.lastChild;
-          const lastStringSpan = lastParagraph.querySelector('[data-slate-string]');
-
-          if (lastStringSpan && lastStringSpan.firstChild) {
-            // Place cursor at end of last text node
-            range.setStart(lastStringSpan.firstChild, lastStringSpan.textContent.length);
-            range.setEnd(lastStringSpan.firstChild, lastStringSpan.textContent.length);
-          } else {
-            range.selectNodeContents(commentBox);
-            range.collapse(false);
-          }
-        } else {
-          range.selectNodeContents(commentBox);
-          range.collapse(false);
-        }
-
+        range.selectNodeContents(commentBox);
+        range.collapse(false);
         sel.removeAllRanges();
         sel.addRange(range);
 
@@ -989,8 +933,7 @@
       commentBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
       console.log('[BetterFrame Selection] ✓ Text added to comment box successfully');
-      console.log('[BetterFrame Selection] Current text content:', commentBox.textContent.substring(0, 100));
-      console.log('[BetterFrame Selection] HTML structure (first 300 chars):', commentBox.innerHTML.substring(0, 300));
+      console.log('[BetterFrame Selection] Current value:', commentBox.value || commentBox.textContent);
       console.log('[BetterFrame Selection] ========================================');
     }, 50);
   }
