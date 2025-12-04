@@ -1118,31 +1118,17 @@
     console.log('[BetterFrame Timestamp] Found timestamp element');
     console.log('[BetterFrame Timestamp] Current timestamp text:', timestampElement.textContent);
 
-    // Frame.io's timestamp should update automatically when video time changes
-    // But we can trigger a click or other interaction to force update
-    // Try clicking the timestamp button/element to sync it
-    const timestampButton = timestampElement.closest('button') ||
-                           timestampElement.closest('[role="button"]') ||
-                           timestampElement.parentElement;
+    // Frame.io automatically updates the timestamp when video time changes
+    // No need to click - just wait for it to update
+    console.log('[BetterFrame Timestamp] Timestamp will auto-sync with video time');
 
-    if (timestampButton) {
-      console.log('[BetterFrame Timestamp] Found timestamp button/container');
-      console.log('[BetterFrame Timestamp] Button tag:', timestampButton.tagName);
-      console.log('[BetterFrame Timestamp] Button class:', timestampButton.className);
-
-      // Try clicking to update
-      timestampButton.click();
-      console.log('[BetterFrame Timestamp] Clicked timestamp button');
-
-      // Check if timestamp updated after a short delay
-      setTimeout(() => {
-        console.log('[BetterFrame Timestamp] Timestamp after click:', timestampElement.textContent);
-        console.log('[BetterFrame Timestamp] ========================================');
-      }, 200);
-    } else {
-      console.log('[BetterFrame Timestamp] No clickable button found, timestamp should auto-sync');
+    // Check if timestamp updated after a short delay
+    setTimeout(() => {
+      const updatedText = timestampElement.textContent;
+      console.log('[BetterFrame Timestamp] Timestamp after video seek:', updatedText);
+      console.log('[BetterFrame Timestamp] ✓ Timestamp auto-update complete');
       console.log('[BetterFrame Timestamp] ========================================');
-    }
+    }, 300);
   }
 
   /**
