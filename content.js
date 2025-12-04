@@ -679,7 +679,7 @@
    */
   function handleTextSelection(e) {
     const selection = window.getSelection();
-    const selectedText = selection.toString().trim();
+    const selectedText = selection.toString(); // Don't trim - allow spaces
 
     // Remove existing menu
     let existingMenu = document.getElementById('betterframe-selection-menu');
@@ -687,6 +687,7 @@
       existingMenu.remove();
     }
 
+    // Allow selection even if it's just spaces
     if (!selectedText || selectedText.length === 0) {
       return;
     }
@@ -857,13 +858,37 @@
       return;
     }
 
-    // Set the text
+    // Set the text with proper event dispatching for React/modern frameworks
     if (commentBox.tagName === 'TEXTAREA' || commentBox.tagName === 'INPUT') {
-      commentBox.value = text;
+      // Use native setter to trigger React's event system
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value'
+      ).set;
+      nativeInputValueSetter.call(commentBox, text);
+
+      // Dispatch all necessary events
       commentBox.dispatchEvent(new Event('input', { bubbles: true }));
+      commentBox.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Set selection to end of text
+      commentBox.selectionStart = text.length;
+      commentBox.selectionEnd = text.length;
     } else if (commentBox.contentEditable === 'true') {
-      commentBox.textContent = text;
+      // For contenteditable, use innerHTML and set cursor position
+      commentBox.innerHTML = text.replace(/\n/g, '<br>');
+
+      // Dispatch input events
       commentBox.dispatchEvent(new Event('input', { bubbles: true }));
+      commentBox.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Set cursor to end
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(commentBox);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
     }
 
     // Focus the comment box
@@ -916,6 +941,39 @@
 
     video.currentTime = seekTime;
     console.log(`[BetterFrame Selection] Seeked to ${seekTime.toFixed(2)}s (estimated start of selected text)`);
+
+    // Update comment timestamp after a short delay to let video update
+    setTimeout(() => {
+      updateCommentTimestamp(seekTime);
+    }, 100);
+  }
+
+  /**
+   * Update the comment timestamp display to match video time
+   */
+  function updateCommentTimestamp(time) {
+    // Find the timestamp element in the comment composer
+    const timestampElement = document.querySelector('.comment-composer__timestamp-text');
+
+    if (!timestampElement) {
+      console.warn('[BetterFrame Selection] Comment timestamp element not found');
+      return;
+    }
+
+    // Frame.io's timestamp should update automatically when video time changes
+    // But we can trigger a click or other interaction to force update
+    // Try clicking the timestamp button/element to sync it
+    const timestampButton = timestampElement.closest('button') ||
+                           timestampElement.closest('[role="button"]') ||
+                           timestampElement.parentElement;
+
+    if (timestampButton && timestampButton.click) {
+      // Click twice: once to capture current time, once to activate
+      timestampButton.click();
+      console.log('[BetterFrame Selection] Clicked timestamp button to sync with video time');
+    } else {
+      console.log('[BetterFrame Selection] Comment timestamp should auto-sync with video time');
+    }
   }
 
   /**
