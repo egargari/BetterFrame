@@ -833,6 +833,11 @@
    * Add text to Frame.io comment box
    */
   function addToCommentBox(text, segment) {
+    console.log('[BetterFrame Selection] ========================================');
+    console.log('[BetterFrame Selection] Adding text to comment box');
+    console.log('[BetterFrame Selection] Text length:', text.length);
+    console.log('[BetterFrame Selection] Text preview:', text.substring(0, 100));
+
     // Try multiple selectors to find the comment input
     const selectors = [
       'textarea[placeholder*="comment" i]',
@@ -848,77 +853,126 @@
       commentBox = document.querySelector(selector);
       if (commentBox && commentBox.offsetParent !== null) {
         console.log('[BetterFrame Selection] Found comment box using selector:', selector);
+        console.log('[BetterFrame Selection] Comment box tag:', commentBox.tagName);
+        console.log('[BetterFrame Selection] Comment box contentEditable:', commentBox.contentEditable);
         break;
       }
     }
 
     if (!commentBox) {
       console.error('[BetterFrame Selection] Could not find comment box');
+      console.error('[BetterFrame Selection] Tried selectors:', selectors);
       alert('Could not find comment box. Please make sure the comments panel is visible.');
       return;
     }
 
-    // Set the text with proper event dispatching for React/modern frameworks
-    if (commentBox.tagName === 'TEXTAREA' || commentBox.tagName === 'INPUT') {
-      // Use native setter to trigger React's event system
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype,
-        'value'
-      ).set;
-      nativeInputValueSetter.call(commentBox, text);
-
-      // Dispatch all necessary events
-      commentBox.dispatchEvent(new Event('input', { bubbles: true }));
-      commentBox.dispatchEvent(new Event('change', { bubbles: true }));
-
-      // Set selection to end of text
-      commentBox.selectionStart = text.length;
-      commentBox.selectionEnd = text.length;
-    } else if (commentBox.contentEditable === 'true') {
-      // For contenteditable, use innerHTML and set cursor position
-      commentBox.innerHTML = text.replace(/\n/g, '<br>');
-
-      // Dispatch input events
-      commentBox.dispatchEvent(new Event('input', { bubbles: true }));
-      commentBox.dispatchEvent(new Event('change', { bubbles: true }));
-
-      // Set cursor to end
-      const range = document.createRange();
-      const sel = window.getSelection();
-      range.selectNodeContents(commentBox);
-      range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-
-    // Focus the comment box
+    // First, focus the comment box to activate it
     commentBox.focus();
+    console.log('[BetterFrame Selection] Focused comment box');
 
-    // Scroll to comment box
-    commentBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Wait a bit for focus to take effect
+    setTimeout(() => {
+      // Set the text with proper event dispatching for React/modern frameworks
+      if (commentBox.tagName === 'TEXTAREA' || commentBox.tagName === 'INPUT') {
+        console.log('[BetterFrame Selection] Using textarea/input method');
 
-    console.log('[BetterFrame Selection] Added text to comment box and focused');
+        // Clear first
+        commentBox.value = '';
+
+        // Use native setter to trigger React's event system
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype,
+          'value'
+        ).set;
+        nativeInputValueSetter.call(commentBox, text);
+
+        // Dispatch all necessary events in order
+        commentBox.dispatchEvent(new Event('focus', { bubbles: true }));
+        commentBox.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        commentBox.dispatchEvent(new Event('change', { bubbles: true }));
+        commentBox.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true }));
+        commentBox.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true }));
+
+        // Set selection to end of text
+        commentBox.selectionStart = text.length;
+        commentBox.selectionEnd = text.length;
+
+        console.log('[BetterFrame Selection] Set textarea value and cursor position');
+      } else if (commentBox.contentEditable === 'true') {
+        console.log('[BetterFrame Selection] Using contenteditable method');
+
+        // Clear first
+        commentBox.textContent = '';
+
+        // For contenteditable, insert text at cursor
+        const textNode = document.createTextNode(text);
+        commentBox.appendChild(textNode);
+
+        // Dispatch input events
+        commentBox.dispatchEvent(new Event('focus', { bubbles: true }));
+        commentBox.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        commentBox.dispatchEvent(new Event('change', { bubbles: true }));
+        commentBox.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true }));
+        commentBox.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true }));
+
+        // Set cursor to end
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(commentBox);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+
+        console.log('[BetterFrame Selection] Set contenteditable text and cursor position');
+      }
+
+      // Focus again to ensure it's active
+      commentBox.focus();
+
+      // Scroll to comment box
+      commentBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      console.log('[BetterFrame Selection] ✓ Text added to comment box successfully');
+      console.log('[BetterFrame Selection] Current value:', commentBox.value || commentBox.textContent);
+      console.log('[BetterFrame Selection] ========================================');
+    }, 50);
   }
 
   /**
    * Seek video to estimated time of selected text
    */
   function seekToEstimatedTime(selectedText, segment) {
+    console.log('[BetterFrame Seek] ========================================');
+    console.log('[BetterFrame Seek] Calculating estimated time for selected text');
+
     const video = findVideoElement();
     if (!video) {
-      console.error('[BetterFrame Selection] Video element not found');
+      console.error('[BetterFrame Seek] ✗ Video element not found');
+      console.log('[BetterFrame Seek] ========================================');
       return;
     }
+
+    console.log('[BetterFrame Seek] ✓ Video element found');
+    console.log('[BetterFrame Seek] Current video time:', video.currentTime.toFixed(2), 'seconds');
 
     const segmentText = segment.querySelector('.betterframe-transcript-text').textContent;
     const segmentStart = parseFloat(segment.dataset.startTime);
     const segmentEnd = parseFloat(segment.dataset.endTime);
     const segmentDuration = segmentEnd - segmentStart;
 
+    console.log('[BetterFrame Seek] Segment info:');
+    console.log('[BetterFrame Seek]   - Start time:', segmentStart.toFixed(2), 's');
+    console.log('[BetterFrame Seek]   - End time:', segmentEnd.toFixed(2), 's');
+    console.log('[BetterFrame Seek]   - Duration:', segmentDuration.toFixed(2), 's');
+
     // Calculate word-based position
     const words = segmentText.split(/\s+/);
     const totalWords = words.length;
     const selectedWords = selectedText.split(/\s+/);
+
+    console.log('[BetterFrame Seek] Word analysis:');
+    console.log('[BetterFrame Seek]   - Total words in segment:', totalWords);
+    console.log('[BetterFrame Seek]   - Selected words count:', selectedWords.length);
 
     // Find position of selected text in words
     let selectedStartWord = 0;
@@ -930,35 +984,71 @@
       }
     }
 
+    console.log('[BetterFrame Seek]   - Selected text starts at word:', selectedStartWord);
+
     // Calculate time per word
     const timePerWord = segmentDuration / totalWords;
+    console.log('[BetterFrame Seek]   - Time per word:', timePerWord.toFixed(3), 's');
 
     // Estimate start time of selected text
     const estimatedTime = segmentStart + (selectedStartWord * timePerWord);
+    console.log('[BetterFrame Seek] Estimated time of selected text:', estimatedTime.toFixed(2), 's');
 
     // Seek to 3-4 words before (approximately 7.5-10 seconds before, or 3*timePerWord)
     const seekTime = Math.max(segmentStart, estimatedTime - (3 * timePerWord));
+    const wordsBeforeOffset = (3 * timePerWord).toFixed(2);
+    console.log('[BetterFrame Seek] Seeking 3 words before (offset:', wordsBeforeOffset, 's)');
+    console.log('[BetterFrame Seek] Final seek time:', seekTime.toFixed(2), 's');
 
     video.currentTime = seekTime;
-    console.log(`[BetterFrame Selection] Seeked to ${seekTime.toFixed(2)}s (estimated start of selected text)`);
+    console.log('[BetterFrame Seek] ✓ Video seeked successfully');
+    console.log('[BetterFrame Seek] New video time:', video.currentTime.toFixed(2), 's');
 
     // Update comment timestamp after a short delay to let video update
     setTimeout(() => {
       updateCommentTimestamp(seekTime);
     }, 100);
+
+    console.log('[BetterFrame Seek] ========================================');
   }
 
   /**
    * Update the comment timestamp display to match video time
    */
   function updateCommentTimestamp(time) {
+    console.log('[BetterFrame Timestamp] ========================================');
+    console.log('[BetterFrame Timestamp] Attempting to update comment timestamp');
+    console.log('[BetterFrame Timestamp] Target time:', time.toFixed(2), 'seconds');
+
     // Find the timestamp element in the comment composer
     const timestampElement = document.querySelector('.comment-composer__timestamp-text');
 
     if (!timestampElement) {
-      console.warn('[BetterFrame Selection] Comment timestamp element not found');
+      console.warn('[BetterFrame Timestamp] ⚠ Comment timestamp element not found');
+      console.warn('[BetterFrame Timestamp] Selector tried: .comment-composer__timestamp-text');
+
+      // Try alternative selectors
+      const alternativeSelectors = [
+        '[class*="timestamp-text"]',
+        '[class*="comment-composer"] [class*="timestamp"]',
+        'button[class*="timestamp"]'
+      ];
+
+      for (const selector of alternativeSelectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          console.log('[BetterFrame Timestamp] Found alternative timestamp element:', selector);
+          console.log('[BetterFrame Timestamp] Element text:', element.textContent);
+          break;
+        }
+      }
+
+      console.log('[BetterFrame Timestamp] ========================================');
       return;
     }
+
+    console.log('[BetterFrame Timestamp] Found timestamp element');
+    console.log('[BetterFrame Timestamp] Current timestamp text:', timestampElement.textContent);
 
     // Frame.io's timestamp should update automatically when video time changes
     // But we can trigger a click or other interaction to force update
@@ -967,12 +1057,23 @@
                            timestampElement.closest('[role="button"]') ||
                            timestampElement.parentElement;
 
-    if (timestampButton && timestampButton.click) {
-      // Click twice: once to capture current time, once to activate
+    if (timestampButton) {
+      console.log('[BetterFrame Timestamp] Found timestamp button/container');
+      console.log('[BetterFrame Timestamp] Button tag:', timestampButton.tagName);
+      console.log('[BetterFrame Timestamp] Button class:', timestampButton.className);
+
+      // Try clicking to update
       timestampButton.click();
-      console.log('[BetterFrame Selection] Clicked timestamp button to sync with video time');
+      console.log('[BetterFrame Timestamp] Clicked timestamp button');
+
+      // Check if timestamp updated after a short delay
+      setTimeout(() => {
+        console.log('[BetterFrame Timestamp] Timestamp after click:', timestampElement.textContent);
+        console.log('[BetterFrame Timestamp] ========================================');
+      }, 200);
     } else {
-      console.log('[BetterFrame Selection] Comment timestamp should auto-sync with video time');
+      console.log('[BetterFrame Timestamp] No clickable button found, timestamp should auto-sync');
+      console.log('[BetterFrame Timestamp] ========================================');
     }
   }
 
